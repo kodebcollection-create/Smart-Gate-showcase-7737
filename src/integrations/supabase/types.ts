@@ -14,7 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      laptops: {
+        Row: {
+          id: string
+          model: string | null
+          registered_at: string
+          serial_number: string
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
+          model?: string | null
+          registered_at?: string
+          serial_number: string
+          user_id?: string | null
+        }
+        Update: {
+          id?: string
+          model?: string | null
+          registered_at?: string
+          serial_number?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "laptops_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

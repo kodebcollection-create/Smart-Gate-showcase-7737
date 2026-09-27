@@ -6,7 +6,7 @@ import { PhotoInput } from "./Photo";
 
 export function ProfileSetup({ userId, email, onDone }: { userId: string; email: string; onDone: () => void }) {
   const [fullName, setFullName] = useState("");
-  const [username, setUsername] = useState(email.split("@")[0].toLowerCase());
+  const [username, setUsername] = useState((email.split("@")[0] ?? "").toLowerCase());
   const [photo, setPhoto] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

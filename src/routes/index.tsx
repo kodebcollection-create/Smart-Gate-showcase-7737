@@ -79,7 +79,7 @@ function Index() {
         <div className="surface text-sm text-muted-foreground">Loading…</div>
       ) : session ? (
         <div className="space-y-3">
-          <RegisterTab email={session.user.email ?? ""} />
+          <RegisterTab userId={session.user.id} />
           <button
             type="button"
             onClick={() => supabase.auth.signOut()}

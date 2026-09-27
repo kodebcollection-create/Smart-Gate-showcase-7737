@@ -14,59 +14,203 @@ export type Database = {
   }
   public: {
     Tables: {
-      laptops: {
+      gate_events: {
         Row: {
+          created_at: string
+          direction: string
+          guard_id: string
           id: string
-          model: string | null
-          registered_at: string
-          serial_number: string
-          user_id: string | null
+          laptop_id: string
+          owner_id: string
         }
         Insert: {
+          created_at?: string
+          direction: string
+          guard_id: string
           id?: string
-          model?: string | null
-          registered_at?: string
-          serial_number: string
-          user_id?: string | null
+          laptop_id: string
+          owner_id: string
         }
         Update: {
+          created_at?: string
+          direction?: string
+          guard_id?: string
           id?: string
-          model?: string | null
-          registered_at?: string
-          serial_number?: string
-          user_id?: string | null
+          laptop_id?: string
+          owner_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "laptops_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "gate_events_laptop_id_fkey"
+            columns: ["laptop_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "laptops"
             referencedColumns: ["id"]
           },
         ]
       }
-      users: {
+      laptop_transfers: {
+        Row: {
+          from_owner: string
+          id: string
+          laptop_id: string
+          to_owner: string
+          transferred_at: string
+          transferred_by: string
+        }
+        Insert: {
+          from_owner: string
+          id?: string
+          laptop_id: string
+          to_owner: string
+          transferred_at?: string
+          transferred_by: string
+        }
+        Update: {
+          from_owner?: string
+          id?: string
+          laptop_id?: string
+          to_owner?: string
+          transferred_at?: string
+          transferred_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "laptop_transfers_laptop_id_fkey"
+            columns: ["laptop_id"]
+            isOneToOne: false
+            referencedRelation: "laptops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      laptops: {
+        Row: {
+          id: string
+          laptop_photo_path: string
+          model: string | null
+          on_campus: boolean
+          owner_id: string
+          registered_at: string
+          secret_qr_id: string
+          serial_number: string
+          status: Database["public"]["Enums"]["laptop_status"]
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          laptop_photo_path: string
+          model?: string | null
+          on_campus?: boolean
+          owner_id: string
+          registered_at?: string
+          secret_qr_id?: string
+          serial_number: string
+          status?: Database["public"]["Enums"]["laptop_status"]
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          laptop_photo_path?: string
+          model?: string | null
+          on_campus?: boolean
+          owner_id?: string
+          registered_at?: string
+          secret_qr_id?: string
+          serial_number?: string
+          status?: Database["public"]["Enums"]["laptop_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "laptops_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
         Row: {
           created_at: string
-          email: string | null
+          email: string
           full_name: string | null
           id: string
-          username: string
+          photo_path: string | null
+          updated_at: string
+          username: string | null
         }
         Insert: {
           created_at?: string
-          email?: string | null
+          email: string
           full_name?: string | null
-          id?: string
-          username: string
+          id: string
+          photo_path?: string | null
+          updated_at?: string
+          username?: string | null
         }
         Update: {
           created_at?: string
-          email?: string | null
+          email?: string
           full_name?: string | null
           id?: string
-          username?: string
+          photo_path?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      scan_logs: {
+        Row: {
+          id: string
+          laptop_id: string | null
+          result: string
+          scanned_at: string
+          scanned_by: string | null
+          scanned_value: string
+        }
+        Insert: {
+          id?: string
+          laptop_id?: string | null
+          result: string
+          scanned_at?: string
+          scanned_by?: string | null
+          scanned_value: string
+        }
+        Update: {
+          id?: string
+          laptop_id?: string | null
+          result?: string
+          scanned_at?: string
+          scanned_by?: string | null
+          scanned_value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_logs_laptop_id_fkey"
+            columns: ["laptop_id"]
+            isOneToOne: false
+            referencedRelation: "laptops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
         }
         Relationships: []
       }
@@ -75,10 +219,54 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_student_role: { Args: never; Returns: boolean }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      lookup_laptop: {
+        Args: { _token: string }
+        Returns: {
+          full_name: string
+          laptop_id: string
+          laptop_photo_path: string
+          model: string
+          on_campus: boolean
+          other_on_campus: boolean
+          owner_id: string
+          owner_photo_path: string
+          serial_number: string
+          status: Database["public"]["Enums"]["laptop_status"]
+          username: string
+        }[]
+      }
+      record_gate_event: {
+        Args: { _direction: string; _laptop_id: string }
+        Returns: string
+      }
+      register_laptop: {
+        Args: { _model: string; _photo_path: string; _serial: string }
+        Returns: string
+      }
+      set_user_role: {
+        Args: {
+          _email: string
+          _grant: boolean
+          _role: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: undefined
+      }
+      transfer_laptop: {
+        Args: { _laptop_id: string; _username: string }
+        Returns: undefined
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "student" | "guard" | "admin"
+      laptop_status: "active" | "lost" | "stolen" | "transferred"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -205,6 +393,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["student", "guard", "admin"],
+      laptop_status: ["active", "lost", "stolen", "transferred"],
+    },
   },
 } as const

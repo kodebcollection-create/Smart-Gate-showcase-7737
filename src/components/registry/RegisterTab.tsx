@@ -1,147 +1,127 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { supabase } from "@/integrations/supabase/client";
+import { errMsg, uploadPhoto } from "@/lib/photos";
 import { Field } from "./Field";
+import { Photo, PhotoInput } from "./Photo";
 
-type Result = { serial: string; model: string; owner: string; qr: string };
+type MyLaptop = {
+  id: string;
+  serial_number: string;
+  model: string | null;
+  status: string;
+  on_campus: boolean;
+  laptop_photo_path: string;
+  secret_qr_id: string;
+  registered_at: string;
+};
 
-export function RegisterTab({ email: accountEmail }: { email: string }) {
-  const [username, setUsername] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+async function toQr(secret: string) {
+  return QRCode.toDataURL(secret, { width: 640, margin: 2, color: { dark: "#0b1220", light: "#ffffff" } });
+}
+
+export function RegisterTab({ userId }: { userId: string }) {
+  const [laptops, setLaptops] = useState<MyLaptop[]>([]);
   const [serial, setSerial] = useState("");
   const [model, setModel] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<Result | null>(null);
+  const [qr, setQr] = useState<{ serial: string; img: string } | null>(null);
 
-  function reset() {
-    setUsername("");
-    setFullName("");
-    setEmail("");
-    setSerial("");
-    setModel("");
-    setResult(null);
-    setError(null);
-  }
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("laptops")
+      .select("id, serial_number, model, status, on_campus, laptop_photo_path, secret_qr_id, registered_at")
+      .eq("owner_id", userId)
+      .order("registered_at", { ascending: false });
+    setLaptops((data as MyLaptop[]) ?? []);
+  }, [userId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const cleanSerial = serial.trim();
-    const cleanUsername = username.trim().toLowerCase();
-    if (!cleanSerial || !cleanUsername) return;
-
+    if (!photo) return setError("Take a photo of the laptop first.");
     setBusy(true);
     setError(null);
-    setResult(null);
     try {
-      const { data: existing, error: lookupError } = await supabase
-        .from("laptops")
-        .select("id")
-        .eq("serial_number", cleanSerial)
-        .maybeSingle();
-      if (lookupError) throw lookupError;
-      if (existing) {
-        setError(`Serial ${cleanSerial} is already registered. Nothing was changed.`);
-        return;
-      }
-
-      const { data: owner, error: ownerError } = await supabase
-        .from("users")
-        .upsert(
-          {
-            username: cleanUsername,
-            full_name: fullName.trim() || null,
-            email: email.trim() || null,
-          },
-          { onConflict: "username" },
-        )
-        .select("id, username, full_name")
-        .single();
-      if (ownerError) throw ownerError;
-
-      const { error: insertError } = await supabase.from("laptops").insert({
-        serial_number: cleanSerial,
-        model: model.trim() || null,
-        user_id: owner.id,
+      const path = await uploadPhoto(userId, "laptop", photo);
+      const { data: secret, error } = await supabase.rpc("register_laptop", {
+        _serial: serial,
+        _model: model,
+        _photo_path: path,
       });
-      if (insertError) throw insertError;
-
-      const qr = await QRCode.toDataURL(cleanSerial, {
-        width: 640,
-        margin: 2,
-        color: { dark: "#0b1220", light: "#ffffff" },
-      });
-      setResult({
-        serial: cleanSerial,
-        model: model.trim(),
-        owner: owner.full_name || owner.username,
-        qr,
-      });
+      if (error) throw error;
+      setQr({ serial: serial.trim().toUpperCase(), img: await toQr(secret as string) });
+      setSerial("");
+      setModel("");
+      setPhoto(null);
+      void load();
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Could not reach the database. Check your connection and try again.",
-      );
+      setError(errMsg(err));
     } finally {
       setBusy(false);
     }
   }
 
-  if (result) {
-    return (
-      <div className="surface space-y-5 text-center">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-success">
-            Device registered
-          </p>
-          <h2 className="mt-1 text-lg font-semibold">{result.owner}</h2>
-          <p className="font-mono text-sm text-muted-foreground">
-            {result.serial}
-            {result.model ? ` · ${result.model}` : ""}
-          </p>
-        </div>
-        <img
-          src={result.qr}
-          alt={`QR code for serial number ${result.serial}`}
-          className="mx-auto w-full max-w-[260px] rounded-xl border border-border bg-white p-3"
-        />
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <a
-            href={result.qr}
-            download={`${result.serial}-qr.png`}
-            className="btn-primary no-underline"
-          >
-            Download QR code
-          </a>
-          <button type="button" onClick={reset} className="btn-ghost w-full sm:w-auto">
-            Register another
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <form onSubmit={submit} className="surface space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Register a laptop</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Signed in as {accountEmail}</p>
-      </div>
-      <Field label="Username" value={username} onChange={setUsername} required mono />
-      <Field label="Full name" value={fullName} onChange={setFullName} />
-      <Field label="Email" type="email" value={email} onChange={setEmail} />
-      <Field label="Serial number" value={serial} onChange={setSerial} required mono />
-      <Field label="Model" value={model} onChange={setModel} placeholder="MacBook Pro 14" />
-      {error && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
+    <div className="space-y-4">
+      {qr && (
+        <div className="surface space-y-4 text-center">
+          <p className="text-xs font-semibold uppercase tracking-widest text-success">QR code ready</p>
+          <p className="font-mono text-sm text-muted-foreground">{qr.serial}</p>
+          <img src={qr.img} alt={`QR code for ${qr.serial}`} className="mx-auto w-full max-w-[240px] rounded-xl border border-border bg-white p-3" />
+          <p className="text-xs text-muted-foreground">
+            Stick this on your laptop. Any older QR for this laptop no longer works.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <a href={qr.img} download={`${qr.serial}-qr.png`} className="btn-primary no-underline">Download QR code</a>
+            <button type="button" onClick={() => setQr(null)} className="btn-ghost w-full sm:w-auto">Close</button>
+          </div>
+        </div>
       )}
-      <button type="submit" disabled={busy} className="btn-primary disabled:opacity-60">
-        {busy ? "Registering…" : "Register & generate QR"}
-      </button>
-    </form>
+
+      <div className="surface space-y-3">
+        <h2 className="text-lg font-semibold">My laptops</h2>
+        {laptops.length === 0 && <p className="text-sm text-muted-foreground">No laptops registered yet.</p>}
+        {laptops.map((l) => (
+          <div key={l.id} className="flex items-center gap-3 border-b border-border/60 pb-3 last:border-0">
+            <Photo path={l.laptop_photo_path} alt="Laptop" className="h-14 w-14 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-mono text-sm">{l.serial_number}</p>
+              <p className="text-xs text-muted-foreground">
+                {l.model || "Laptop"} · {l.status} · {l.on_campus ? "on campus" : "off campus"}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="text-xs text-primary hover:underline"
+              onClick={async () => setQr({ serial: l.serial_number, img: await toQr(l.secret_qr_id) })}
+            >
+              QR
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={submit} className="surface space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Register a laptop</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Re-registering an existing serial gives it a fresh QR code and cancels the old one.
+          </p>
+        </div>
+        <Field label="Serial number" value={serial} onChange={setSerial} required mono />
+        <Field label="Model" value={model} onChange={setModel} placeholder="HP EliteBook 840" />
+        <PhotoInput label="Photo of the laptop" file={photo} onChange={setPhoto} capture="environment" />
+        {error && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+        <button type="submit" disabled={busy} className="btn-primary disabled:opacity-60">
+          {busy ? "Registering…" : "Register & generate QR"}
+        </button>
+      </form>
+    </div>
   );
 }

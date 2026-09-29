@@ -219,6 +219,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_staff_role: { Args: never; Returns: boolean }
       claim_student_role: { Args: never; Returns: boolean }
       has_role: {
         Args: {

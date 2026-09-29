@@ -1,144 +1,92 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type QrScannerType from "qr-scanner";
 import { supabase } from "@/integrations/supabase/client";
+import { errMsg } from "@/lib/photos";
+import { Photo } from "./Photo";
 
 type Match = {
-  serial: string;
+  laptop_id: string;
+  serial_number: string;
   model: string | null;
-  registered_at: string;
-  username: string | null;
+  status: string;
+  on_campus: boolean;
+  laptop_photo_path: string;
   full_name: string | null;
+  username: string | null;
+  owner_photo_path: string | null;
+  other_on_campus: boolean;
 };
 
 type Status =
   | { kind: "idle" }
   | { kind: "scanning" }
-  | { kind: "checking"; value: string }
-  | { kind: "match"; value: string; match: Match }
-  | { kind: "nomatch"; value: string }
+  | { kind: "checking" }
+  | { kind: "match"; match: Match }
+  | { kind: "done"; match: Match; direction: "in" | "out"; at: string }
+  | { kind: "nomatch" }
   | { kind: "error"; title: string; message: string };
 
 export function ScanTab() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const scannerRef = useRef<QrScannerType | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [run, setRun] = useState(0);
+  const [checks, setChecks] = useState({ face: false, serial: false });
+  const [busy, setBusy] = useState(false);
 
   const lookup = useCallback(async (value: string) => {
-    const scanned = value.trim();
-    if (!scanned) {
-      setStatus({
-        kind: "error",
-        title: "Unreadable code",
-        message: "That code did not contain a serial number. Try holding the camera steadier.",
-      });
-      return;
-    }
-    setStatus({ kind: "checking", value: scanned });
+    setStatus({ kind: "checking" });
+    setChecks({ face: false, serial: false });
     try {
-      const { data, error } = await supabase
-        .from("laptops")
-        .select("serial_number, model, registered_at, users(username, full_name)")
-        .eq("serial_number", scanned)
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("lookup_laptop", { _token: value });
       if (error) throw error;
-      if (!data) {
-        setStatus({ kind: "nomatch", value: scanned });
-        return;
-      }
-      const owner = (data as unknown as { users: { username: string; full_name: string } | null })
-        .users;
-      setStatus({
-        kind: "match",
-        value: scanned,
-        match: {
-          serial: data.serial_number,
-          model: data.model,
-          registered_at: data.registered_at,
-          username: owner?.username ?? null,
-          full_name: owner?.full_name ?? null,
-        },
-      });
+      const row = (data as Match[] | null)?.[0];
+      setStatus(row ? { kind: "match", match: row } : { kind: "nomatch" });
     } catch (err) {
-      setStatus({
-        kind: "error",
-        title: "Lookup failed",
-        message:
-          err instanceof Error
-            ? err.message
-            : "We could not reach the registry. Check your connection and scan again.",
-      });
+      setStatus({ kind: "error", title: "Lookup failed", message: errMsg(err) });
     }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     let scanner: QrScannerType | null = null;
-
     (async () => {
       const { default: QrScanner } = await import("qr-scanner");
       if (cancelled) return;
-
       const hasCamera = await QrScanner.hasCamera().catch(() => false);
       if (cancelled) return;
       if (!hasCamera) {
-        setStatus({
-          kind: "error",
-          title: "No camera found",
-          message: "This device has no usable camera. Open the link on a phone to scan a code.",
-        });
+        setStatus({ kind: "error", title: "No camera found", message: "Open this page on a phone to scan codes." });
         return;
       }
-
       const video = videoRef.current;
       if (!video) return;
-
       scanner = new QrScanner(
         video,
         (res) => {
           scanner?.stop();
           void lookup(res.data);
         },
-        {
-          preferredCamera: "environment",
-          highlightScanRegion: true,
-          highlightCodeOutline: true,
-          returnDetailedScanResult: true,
-        },
+        { preferredCamera: "environment", highlightScanRegion: true, highlightCodeOutline: true, returnDetailedScanResult: true },
       );
-      scannerRef.current = scanner;
-
       try {
         await scanner.start();
         if (!cancelled) setStatus({ kind: "scanning" });
       } catch (err) {
         const name = (err as { name?: string })?.name ?? "";
-        const denied =
-          name === "NotAllowedError" ||
-          name === "SecurityError" ||
-          String(err).toLowerCase().includes("permission");
-        setStatus(
-          denied
-            ? {
-                kind: "error",
-                title: "Camera access blocked",
-                message:
-                  "Allow camera access for this site in your browser settings, then tap Scan again.",
-              }
-            : {
-                kind: "error",
-                title: "Camera unavailable",
-                message: "The camera could not be started. Close other apps using it and retry.",
-              },
-        );
+        const denied = name === "NotAllowedError" || name === "SecurityError" || String(err).toLowerCase().includes("permission");
+        setStatus({
+          kind: "error",
+          title: denied ? "Camera access blocked" : "Camera unavailable",
+          message: denied
+            ? "Allow camera access for this site in your browser settings, then tap Scan again."
+            : "The camera could not be started. Close other apps using it and retry.",
+        });
       }
     })();
-
     return () => {
       cancelled = true;
       scanner?.stop();
       scanner?.destroy();
-      scannerRef.current = null;
     };
   }, [run, lookup]);
 
@@ -147,14 +95,27 @@ export function ScanTab() {
     setRun((n) => n + 1);
   };
 
+  async function grant(m: Match) {
+    const direction = m.on_campus ? "out" : "in";
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.rpc("record_gate_event", { _laptop_id: m.laptop_id, _direction: direction });
+      if (error) throw error;
+      setStatus({ kind: "done", match: m, direction, at: data as string });
+    } catch (err) {
+      setStatus({ kind: "error", title: "Access not recorded", message: errMsg(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const showCamera = status.kind === "idle" || status.kind === "scanning";
 
   return (
     <div className="space-y-4">
       <div className={showCamera ? "surface space-y-3" : "hidden"}>
-        <h2 className="text-lg font-semibold">Scan a device QR code</h2>
+        <h2 className="text-lg font-semibold">Scan device QR code</h2>
         <div className="overflow-hidden rounded-xl border border-border bg-black">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video ref={videoRef} className="aspect-square w-full object-cover" playsInline muted />
         </div>
         <p className="text-sm text-muted-foreground">
@@ -162,69 +123,93 @@ export function ScanTab() {
         </p>
       </div>
 
-      {status.kind === "checking" && (
-        <div className="surface text-sm text-muted-foreground">
-          Checking <span className="font-mono text-foreground">{status.value}</span> against the
-          registry…
-        </div>
-      )}
+      {status.kind === "checking" && <div className="surface text-sm text-muted-foreground">Checking the registry…</div>}
 
-      {status.kind === "match" && (
-        <div className="surface border-success/60 bg-success/10 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-success">Match found</p>
-          <h2 className="text-xl font-semibold">
-            {status.match.full_name || status.match.username || "Unknown owner"}
-          </h2>
-          <dl className="space-y-2 text-sm">
-            <Row label="Username" value={status.match.username ?? "—"} mono />
-            <Row label="Serial" value={status.match.serial} mono />
-            <Row label="Model" value={status.match.model || "—"} />
-            <Row
-              label="Registered"
-              value={new Date(status.match.registered_at).toLocaleDateString()}
-            />
-          </dl>
-          <button type="button" onClick={rescan} className="btn-ghost w-full">
-            Scan again
-          </button>
+      {status.kind === "match" && (() => {
+        const m = status.match;
+        const flagged = m.status !== "active";
+        const blocked = flagged || (!m.on_campus && m.other_on_campus);
+        return (
+          <div className={`surface space-y-4 ${blocked ? "border-destructive/60 bg-destructive/10" : "border-success/60 bg-success/10"}`}>
+            <p className={`text-xs font-semibold uppercase tracking-widest ${blocked ? "text-destructive" : "text-success"}`}>
+              {flagged ? `Flagged: ${m.status}` : blocked ? "Another laptop already on campus" : m.on_campus ? "Signing out" : "Signing in"}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Photo path={m.owner_photo_path} alt="Owner" className="aspect-square w-full" />
+                <p className="text-center text-xs text-muted-foreground">Owner</p>
+              </div>
+              <div className="space-y-1">
+                <Photo path={m.laptop_photo_path} alt="Laptop" className="aspect-square w-full" />
+                <p className="text-center text-xs text-muted-foreground">Laptop</p>
+              </div>
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">{m.full_name || "Unknown owner"}</h2>
+              <p className="font-mono text-sm text-muted-foreground">@{m.username}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-background/60 p-3">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Serial number</p>
+              <p className="font-mono text-lg break-all">{m.serial_number}</p>
+              <p className="text-xs text-muted-foreground">{m.model || "Laptop"}</p>
+            </div>
+            {!blocked && (
+              <>
+                <Check label="Photo matches the person" checked={checks.face} onChange={(v) => setChecks({ ...checks, face: v })} />
+                <Check label="Serial matches the laptop" checked={checks.serial} onChange={(v) => setChecks({ ...checks, serial: v })} />
+                <button
+                  type="button"
+                  disabled={!checks.face || !checks.serial || busy}
+                  onClick={() => grant(m)}
+                  className="btn-primary disabled:opacity-50"
+                >
+                  {busy ? "Recording…" : m.on_campus ? "Access Granted — Sign out" : "Access Granted — Sign in"}
+                </button>
+              </>
+            )}
+            <button type="button" onClick={rescan} className="btn-ghost w-full">
+              {blocked ? "Deny & scan again" : "Deny"}
+            </button>
+          </div>
+        );
+      })()}
+
+      {status.kind === "done" && (
+        <div className="surface space-y-3 border-success/60 bg-success/10">
+          <p className="text-xs font-semibold uppercase tracking-widest text-success">
+            Signed {status.direction === "in" ? "in" : "out"}
+          </p>
+          <h2 className="text-xl font-semibold">{status.match.full_name}</h2>
+          <p className="font-mono text-sm">{status.match.serial_number}</p>
+          <p className="font-mono text-sm text-muted-foreground">{new Date(status.at).toLocaleString()}</p>
+          <button type="button" onClick={rescan} className="btn-primary">Scan next</button>
         </div>
       )}
 
       {status.kind === "nomatch" && (
-        <div className="surface border-destructive/60 bg-destructive/10 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-destructive">
-            No match
-          </p>
-          <p className="text-sm text-muted-foreground">
-            This serial number is not in the registry.
-          </p>
-          <p className="font-mono text-base break-all">{status.value}</p>
-          <button type="button" onClick={rescan} className="btn-ghost w-full">
-            Scan again
-          </button>
+        <div className="surface space-y-3 border-destructive/60 bg-destructive/10">
+          <p className="text-xs font-semibold uppercase tracking-widest text-destructive">Unregistered Device</p>
+          <p className="text-sm text-muted-foreground">This QR code is not valid. It may be old, copied or fake.</p>
+          <button type="button" onClick={rescan} className="btn-ghost w-full">Scan again</button>
         </div>
       )}
 
       {status.kind === "error" && (
         <div className="surface space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-destructive">
-            {status.title}
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-destructive">{status.title}</p>
           <p className="text-sm text-muted-foreground">{status.message}</p>
-          <button type="button" onClick={rescan} className="btn-ghost w-full">
-            Scan again
-          </button>
+          <button type="button" onClick={rescan} className="btn-ghost w-full">Scan again</button>
         </div>
       )}
     </div>
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-border/60 pb-2 last:border-0">
-      <dt className="text-xs uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className={`text-right ${mono ? "font-mono break-all" : ""}`}>{value}</dd>
-    </div>
+    <label className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-5 w-5 accent-[var(--primary)]" />
+      {label}
+    </label>
   );
 }

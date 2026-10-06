@@ -86,6 +86,7 @@ export type Database = {
       }
       laptops: {
         Row: {
+          deregistered_at: string | null
           id: string
           laptop_photo_path: string
           model: string | null
@@ -98,6 +99,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          deregistered_at?: string | null
           id?: string
           laptop_photo_path: string
           model?: string | null
@@ -110,6 +112,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          deregistered_at?: string | null
           id?: string
           laptop_photo_path?: string
           model?: string | null

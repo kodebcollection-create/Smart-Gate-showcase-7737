@@ -181,7 +181,12 @@ export function ScanTab() {
           </p>
           <h2 className="text-xl font-semibold">{status.match.full_name}</h2>
           <p className="font-mono text-sm">{status.match.serial_number}</p>
-          <p className="font-mono text-sm text-muted-foreground">{new Date(status.at).toLocaleString()}</p>
+          <p className="font-mono text-sm text-muted-foreground">
+            {status.direction === "in" ? "Time in: " : "Time out: "}{new Date(status.at).toLocaleString()}
+          </p>
+          {status.direction === "out" && (
+            <p className="text-sm text-muted-foreground">This laptop is now deregistered. Its QR code no longer works.</p>
+          )}
           <button type="button" onClick={rescan} className="btn-primary">Scan next</button>
         </div>
       )}

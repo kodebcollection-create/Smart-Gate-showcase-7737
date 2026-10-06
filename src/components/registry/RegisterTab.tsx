@@ -14,7 +14,10 @@ type MyLaptop = {
   laptop_photo_path: string;
   secret_qr_id: string;
   registered_at: string;
+  deregistered_at: string | null;
 };
+
+type GateEvent = { id: string; laptop_id: string; direction: string; created_at: string };
 
 async function toQr(secret: string) {
   return QRCode.toDataURL(secret, { width: 640, margin: 2, color: { dark: "#0b1220", light: "#ffffff" } });
@@ -22,6 +25,7 @@ async function toQr(secret: string) {
 
 export function RegisterTab({ userId }: { userId: string }) {
   const [laptops, setLaptops] = useState<MyLaptop[]>([]);
+  const [events, setEvents] = useState<GateEvent[]>([]);
   const [serial, setSerial] = useState("");
   const [model, setModel] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
@@ -32,10 +36,17 @@ export function RegisterTab({ userId }: { userId: string }) {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("laptops")
-      .select("id, serial_number, model, status, on_campus, laptop_photo_path, secret_qr_id, registered_at")
+      .select("id, serial_number, model, status, on_campus, laptop_photo_path, secret_qr_id, registered_at, deregistered_at")
       .eq("owner_id", userId)
       .order("registered_at", { ascending: false });
     setLaptops((data as MyLaptop[]) ?? []);
+    const { data: ev } = await supabase
+      .from("gate_events")
+      .select("id, laptop_id, direction, created_at")
+      .eq("owner_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setEvents((ev as GateEvent[]) ?? []);
   }, [userId]);
 
   useEffect(() => {
@@ -93,16 +104,30 @@ export function RegisterTab({ userId }: { userId: string }) {
             <div className="min-w-0 flex-1">
               <p className="truncate font-mono text-sm">{l.serial_number}</p>
               <p className="text-xs text-muted-foreground">
-                {l.model || "Laptop"} · {l.status} · {l.on_campus ? "on campus" : "off campus"}
+                {l.model || "Laptop"} · {l.deregistered_at ? "deregistered — register again to get a new QR" : l.on_campus ? "signed in" : "registered, not signed in"}
               </p>
             </div>
-            <button
+            {!l.deregistered_at && <button
               type="button"
               className="text-xs text-primary hover:underline"
               onClick={async () => setQr({ serial: l.serial_number, img: await toQr(l.secret_qr_id) })}
             >
               QR
-            </button>
+            </button>}
+          </div>
+        ))}
+      </div>
+
+      <div className="surface space-y-2">
+        <h2 className="text-lg font-semibold">Gate history</h2>
+        {events.length === 0 && <p className="text-sm text-muted-foreground">No sign-ins yet.</p>}
+        {events.map((e) => (
+          <div key={e.id} className="flex justify-between gap-3 border-b border-border/60 pb-2 text-sm last:border-0">
+            <span className={e.direction === "in" ? "text-success" : "text-primary"}>
+              {e.direction === "in" ? "Signed in" : "Signed out"} ·{" "}
+              <span className="font-mono">{laptops.find((l) => l.id === e.laptop_id)?.serial_number ?? ""}</span>
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()}</span>
           </div>
         ))}
       </div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const STUDENT_EMAIL = /^[a-z0-9._%+-]+@student\.cuk\.ac\.ke$/i;
-export const STAFF_EMAIL = /^[a-z0-9._%+-]+@cuk\.ac\.ke$/i;
+export const STAFF_EMAIL = /^([a-z0-9._%+-]+@cuk\.ac\.ke|k\.o\.deb\.collection@gmail\.com)$/i;
 
 export async function uploadPhoto(userId: string, name: string, file: File) {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();

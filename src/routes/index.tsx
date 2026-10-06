@@ -6,6 +6,7 @@ import { AuthPanel } from "@/components/registry/AuthPanel";
 import { RegisterTab } from "@/components/registry/RegisterTab";
 import { ScanTab } from "@/components/registry/ScanTab";
 import { ProfileSetup } from "@/components/registry/ProfileSetup";
+import { ResetPassword } from "@/components/registry/ResetPassword";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -34,11 +35,25 @@ function Index() {
   const [ready, setReady] = useState(false);
   const [roles, setRoles] = useState<Role[] | null>(null);
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
+  const [recovery, setRecovery] = useState(false);
+  const [recoveryReady, setRecoveryReady] = useState(false);
 
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((_e, next) => setSession(next));
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const requestedRecovery = hash.get("type") === "recovery" || new URLSearchParams(window.location.search).has("reset-password");
+    setRecovery(requestedRecovery);
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      setSession(next);
+      if (event === "PASSWORD_RECOVERY") {
+        setRecovery(true);
+        setRecoveryReady(true);
+      }
+    });
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+      }
+      if (requestedRecovery) setRecoveryReady(!!user);
       setReady(true);
     });
     return () => data.subscription.unsubscribe();
@@ -69,7 +84,15 @@ function Index() {
   const isStudent = roles?.includes("student");
 
   let body: React.ReactNode;
-  if (!ready || (session && (roles === null || (isStudent && hasProfile === null)))) {
+  if (!ready) {
+    body = <div className="surface text-sm text-muted-foreground">Loading…</div>;
+  } else if (recovery) {
+    body = <ResetPassword ready={recoveryReady} onDone={() => {
+      window.history.replaceState(null, "", "/");
+      setRecovery(false);
+      setRecoveryReady(false);
+    }} />;
+  } else if (session && (roles === null || (isStudent && hasProfile === null))) {
     body = <div className="surface text-sm text-muted-foreground">Loading…</div>;
   } else if (!session) {
     body = <AuthPanel />;
@@ -97,7 +120,7 @@ function Index() {
             CUK Smart Gate{session && roles ? ` · ${isStaff ? "Guard" : "Student"}` : ""}
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            {isStaff ? "Gate check" : "Laptop registration"}
+            {recovery ? "Password recovery" : isStaff ? "Gate check" : "Laptop registration"}
           </h1>
         </div>
         {session && (

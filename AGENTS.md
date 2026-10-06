@@ -12,4 +12,5 @@
 ## Project rules
 
 - The whole app is one route (`src/routes/index.tsx`) with client-side tab switching — the spec requires a single shareable page, so do not add routing.
+- Password recovery is a public state on the index route, selected by the recovery hash/event or reset-password query parameter, so recovery works without adding a second page.
 - Device registry reads/writes go through the browser Supabase client; lookups are public by RLS so scanning works without an account.

@@ -1,0 +1,3 @@
+- [x] Add forgotten-password request and new-password form, preserving existing profiles.
+- [ ] Configure SmartGate authentication email branding (requires supported sender setup).
+- [ ] Verify password-recovery request and recovery form.

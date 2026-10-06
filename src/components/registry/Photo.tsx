@@ -18,7 +18,7 @@ export function PhotoInput({
   label: string;
   file: File | null;
   onChange: (f: File | null) => void;
-  capture: "user" | "environment";
+  capture?: "user" | "environment";
 }) {
   const preview = file ? URL.createObjectURL(file) : null;
   return (

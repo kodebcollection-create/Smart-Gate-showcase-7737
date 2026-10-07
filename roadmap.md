@@ -1,3 +1,3 @@
 - [x] Add forgotten-password request and new-password form, preserving existing profiles.
 - [ ] Configure SmartGate authentication email branding (requires supported sender setup).
-- [ ] Verify password-recovery request and recovery form.
+- [ ] Verify password-recovery request and recovery form.- [x] CSV export, passport photo on scan, AI history questions for guards

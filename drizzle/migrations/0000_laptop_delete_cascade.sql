@@ -1,0 +1,3 @@
+ALTER TABLE public.gate_events DROP CONSTRAINT gate_events_laptop_id_fkey, ADD CONSTRAINT gate_events_laptop_id_fkey FOREIGN KEY (laptop_id) REFERENCES public.laptops(id) ON DELETE CASCADE;
+ALTER TABLE public.scan_logs DROP CONSTRAINT scan_logs_laptop_id_fkey, ADD CONSTRAINT scan_logs_laptop_id_fkey FOREIGN KEY (laptop_id) REFERENCES public.laptops(id) ON DELETE SET NULL;
+ALTER TABLE public.laptop_transfers DROP CONSTRAINT laptop_transfers_laptop_id_fkey, ADD CONSTRAINT laptop_transfers_laptop_id_fkey FOREIGN KEY (laptop_id) REFERENCES public.laptops(id) ON DELETE CASCADE;

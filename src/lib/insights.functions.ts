@@ -12,7 +12,7 @@ export const askGateInsights = createServerFn({ method: "POST" })
       return { error: "Only guards can use this.", answer: null };
     }
     const visits = await loadVisits(context.supabase, 1500);
-    const apiKey = process.env.LOVABLE_API_KEY;
+    const apiKey = process.env["LOVABLE_API_KEY"];
     if (!apiKey) return { error: "AI is not configured.", answer: null };
 
     const history = visits

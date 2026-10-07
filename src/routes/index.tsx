@@ -7,6 +7,7 @@ import { RegisterTab } from "@/components/registry/RegisterTab";
 import { ScanTab } from "@/components/registry/ScanTab";
 import { ProfileSetup } from "@/components/registry/ProfileSetup";
 import { ResetPassword } from "@/components/registry/ResetPassword";
+import { StaffTools } from "@/components/registry/StaffTools";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -97,7 +98,12 @@ function Index() {
   } else if (!session) {
     body = <AuthPanel />;
   } else if (isStaff) {
-    body = <ScanTab />;
+    body = (
+      <>
+        <ScanTab />
+        <StaffTools />
+      </>
+    );
   } else if (isStudent) {
     body = hasProfile ? (
       <RegisterTab userId={session.user.id} />

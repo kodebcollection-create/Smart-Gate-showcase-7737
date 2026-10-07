@@ -137,7 +137,7 @@ export function ScanTab() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Photo path={m.owner_photo_path} alt="Owner" className="aspect-square w-full" />
-                <p className="text-center text-xs text-muted-foreground">Owner</p>
+                <p className="text-center text-xs text-muted-foreground">Student passport photo</p>
               </div>
               <div className="space-y-1">
                 <Photo path={m.laptop_photo_path} alt="Laptop" className="aspect-square w-full" />

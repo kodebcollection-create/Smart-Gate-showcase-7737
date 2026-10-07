@@ -1,4 +1,4 @@
-# Pixel Perfect Replica
+# SmartGate
 
 Implement exactly the screenshot and nothing else
 

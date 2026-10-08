@@ -8,6 +8,7 @@ import { ScanTab } from "@/components/registry/ScanTab";
 import { ProfileSetup } from "@/components/registry/ProfileSetup";
 import { ResetPassword } from "@/components/registry/ResetPassword";
 import { StaffTools } from "@/components/registry/StaffTools";
+import { AdminTab } from "@/components/registry/AdminTab";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -38,6 +39,7 @@ function Index() {
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
   const [recovery, setRecovery] = useState(false);
   const [recoveryReady, setRecoveryReady] = useState(false);
+  const [staffTab, setStaffTab] = useState<"scan" | "admin">("scan");
 
   useEffect(() => {
     const hash = new URLSearchParams(window.location.hash.slice(1));
@@ -98,10 +100,26 @@ function Index() {
   } else if (!session) {
     body = <AuthPanel />;
   } else if (isStaff) {
+    const isAdmin = roles?.includes("admin");
     body = (
       <>
-        <ScanTab />
-        <StaffTools />
+        {isAdmin && (
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            {(["scan", "admin"] as const).map((t) => (
+              <button key={t} type="button" onClick={() => setStaffTab(t)} className={staffTab === t ? "btn-primary" : "btn-ghost w-full"}>
+                {t === "scan" ? "Scanner" : "Admin"}
+              </button>
+            ))}
+          </div>
+        )}
+        {isAdmin && staffTab === "admin" ? (
+          <AdminTab />
+        ) : (
+          <>
+            <ScanTab />
+            <StaffTools />
+          </>
+        )}
       </>
     );
   } else if (isStudent) {

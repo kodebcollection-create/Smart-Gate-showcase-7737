@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { errMsg } from "@/lib/photos";
 import { loadVisits, visitsToCsv } from "@/lib/gate-history";
 import { askGateInsights } from "@/lib/insights.functions";
+import { LostFound } from "./LostFound";
 
 export function StaffTools() {
   const [busy, setBusy] = useState(false);
@@ -48,6 +49,7 @@ export function StaffTools() {
 
   return (
     <div className="mt-4 space-y-4">
+      <LostFound />
       <div className="surface space-y-3">
         <h2 className="text-lg font-semibold">Gate history export</h2>
         <p className="text-xs text-muted-foreground">Student, laptop, sign-in and sign-out times as a spreadsheet file.</p>

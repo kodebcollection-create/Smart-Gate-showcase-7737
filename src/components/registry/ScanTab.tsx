@@ -26,25 +26,90 @@ type Status =
   | { kind: "nomatch" }
   | { kind: "error"; title: string; message: string };
 
+function soundAlarm() {
+  try {
+    const ctx = new AudioContext();
+    for (let i = 0; i < 6; i++) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "square";
+      o.frequency.value = i % 2 ? 660 : 990;
+      g.gain.value = 0.25;
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + i * 0.3);
+      o.stop(ctx.currentTime + i * 0.3 + 0.25);
+    }
+    navigator.vibrate?.([400, 150, 400, 150, 400]);
+  } catch {
+    /* audio unavailable */
+  }
+}
+
 export function ScanTab() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [run, setRun] = useState(0);
   const [checks, setChecks] = useState({ face: false, serial: false });
   const [busy, setBusy] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [pending, setPending] = useState(0);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [alarm, setAlarm] = useState<Match | null>(null);
+
+  useEffect(() => {
+    const sync = async () => {
+      setOffline(!navigator.onLine);
+      if (!navigator.onLine) return;
+      try {
+        if (pendingCount()) {
+          const r = await syncQueue();
+          setSyncMsg(r.failed.length ? `Synced ${r.synced}; ${r.failed.length} rejected: ${r.failed.join("; ")}` : r.synced ? `Synced ${r.synced} offline scan(s).` : null);
+        }
+        await cacheRegistry();
+      } catch {
+        /* keep previous cache */
+      }
+      setPending(pendingCount());
+    };
+    const goOffline = () => setOffline(true);
+    void sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  const show = useCallback((row: Match | null) => {
+    if (row && row.status !== "active") {
+      setAlarm(row);
+      soundAlarm();
+    }
+    setStatus(row ? { kind: "match", match: row } : { kind: "nomatch" });
+  }, []);
+
+  const lookupOffline = useCallback(async (value: string) => {
+    setOffline(true);
+    const r = await offlineLookup(value);
+    if (r === "nocache") setStatus({ kind: "error", title: "Offline", message: "No saved registry on this phone yet. Connect once to download it." });
+    else show(r);
+  }, [show]);
 
   const lookup = useCallback(async (value: string) => {
     setStatus({ kind: "checking" });
     setChecks({ face: false, serial: false });
+    if (!navigator.onLine) return lookupOffline(value);
     try {
       const { data, error } = await supabase.rpc("lookup_laptop", { _token: value });
       if (error) throw error;
-      const row = (data as Match[] | null)?.[0];
-      setStatus(row ? { kind: "match", match: row } : { kind: "nomatch" });
+      setOffline(false);
+      show((data as Match[] | null)?.[0] ?? null);
     } catch (err) {
+      if (/fetch|network/i.test(errMsg(err))) return lookupOffline(value);
       setStatus({ kind: "error", title: "Lookup failed", message: errMsg(err) });
     }
-  }, []);
+  }, [show, lookupOffline]);
 
   useEffect(() => {
     let cancelled = false;

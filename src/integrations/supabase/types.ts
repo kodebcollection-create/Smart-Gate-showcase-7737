@@ -134,6 +134,44 @@ export type Database = {
           },
         ]
       }
+      lost_report_events: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          laptop_id: string
+          note: string | null
+          owner_id: string
+          stage: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          laptop_id: string
+          note?: string | null
+          owner_id: string
+          stage: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          laptop_id?: string
+          note?: string | null
+          owner_id?: string
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lost_report_events_laptop_id_fkey"
+            columns: ["laptop_id"]
+            isOneToOne: false
+            referencedRelation: "laptops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -222,6 +260,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_lost_update: {
+        Args: { _laptop_id: string; _note: string; _stage: string }
+        Returns: undefined
+      }
       claim_staff_role: { Args: never; Returns: boolean }
       claim_student_role: { Args: never; Returns: boolean }
       has_role: {

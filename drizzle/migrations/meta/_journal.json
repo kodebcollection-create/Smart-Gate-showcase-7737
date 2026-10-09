@@ -15,6 +15,13 @@
       "when": 1791565437741,
       "tag": "0001_lost_reports_offline_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791565599054,
+      "tag": "0002_lost_report_timeline",
+      "breakpoints": true
     }
   ]
 }

@@ -104,16 +104,33 @@ export function RegisterTab({ userId }: { userId: string }) {
             <div className="min-w-0 flex-1">
               <p className="truncate font-mono text-sm">{l.serial_number}</p>
               <p className="text-xs text-muted-foreground">
-                {l.model || "Laptop"} · {l.deregistered_at ? "deregistered — register again to get a new QR" : l.on_campus ? "signed in" : "registered, not signed in"}
+                {l.model || "Laptop"} · {l.status !== "active" ? <span className="font-semibold text-destructive uppercase">{l.status}</span> : l.deregistered_at ? "deregistered — register again to get a new QR" : l.on_campus ? "signed in" : "registered, not signed in"}
               </p>
             </div>
-            {!l.deregistered_at && <button
-              type="button"
-              className="text-xs text-primary hover:underline"
-              onClick={async () => setQr({ serial: l.serial_number, img: await toQr(l.secret_qr_id) })}
-            >
-              QR
-            </button>}
+            <div className="flex flex-col items-end gap-1">
+              {!l.deregistered_at && l.status === "active" && <button
+                type="button"
+                className="text-xs text-primary hover:underline"
+                onClick={async () => setQr({ serial: l.serial_number, img: await toQr(l.secret_qr_id) })}
+              >
+                QR
+              </button>}
+              {(l.status === "active" || l.status === "lost") && (
+                <button
+                  type="button"
+                  className={`text-xs hover:underline ${l.status === "lost" ? "text-success" : "text-destructive"}`}
+                  onClick={async () => {
+                    const lost = l.status === "active";
+                    if (lost && !confirm(`Report ${l.serial_number} as lost? Gates will raise an alarm if it is scanned.`)) return;
+                    const { error } = await supabase.rpc("report_laptop_lost", { _laptop_id: l.id, _lost: lost });
+                    if (error) setError(errMsg(error));
+                    void load();
+                  }}
+                >
+                  {l.status === "lost" ? "I found it" : "Report lost"}
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

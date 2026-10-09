@@ -251,9 +251,17 @@ export type Database = {
         Args: { _direction: string; _laptop_id: string }
         Returns: string
       }
+      record_gate_event_at: {
+        Args: { _at: string; _direction: string; _laptop_id: string }
+        Returns: string
+      }
       register_laptop: {
         Args: { _model: string; _photo_path: string; _serial: string }
         Returns: string
+      }
+      report_laptop_lost: {
+        Args: { _laptop_id: string; _lost: boolean }
+        Returns: undefined
       }
       set_user_role: {
         Args: {

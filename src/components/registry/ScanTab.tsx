@@ -3,6 +3,7 @@ import type QrScannerType from "qr-scanner";
 import { supabase } from "@/integrations/supabase/client";
 import { errMsg } from "@/lib/photos";
 import { Photo } from "./Photo";
+import { cacheRegistry, offlineLookup, pendingCount, queueOffline, syncQueue } from "@/lib/offline-gate";
 
 type Match = {
   laptop_id: string;
@@ -15,6 +16,7 @@ type Match = {
   username: string | null;
   owner_photo_path: string | null;
   other_on_campus: boolean;
+  owner_id?: string;
 };
 
 type Status =
@@ -26,25 +28,90 @@ type Status =
   | { kind: "nomatch" }
   | { kind: "error"; title: string; message: string };
 
+function soundAlarm() {
+  try {
+    const ctx = new AudioContext();
+    for (let i = 0; i < 6; i++) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "square";
+      o.frequency.value = i % 2 ? 660 : 990;
+      g.gain.value = 0.25;
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + i * 0.3);
+      o.stop(ctx.currentTime + i * 0.3 + 0.25);
+    }
+    navigator.vibrate?.([400, 150, 400, 150, 400]);
+  } catch {
+    /* audio unavailable */
+  }
+}
+
 export function ScanTab() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [run, setRun] = useState(0);
   const [checks, setChecks] = useState({ face: false, serial: false });
   const [busy, setBusy] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [pending, setPending] = useState(0);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [alarm, setAlarm] = useState<Match | null>(null);
+
+  useEffect(() => {
+    const sync = async () => {
+      setOffline(!navigator.onLine);
+      if (!navigator.onLine) return;
+      try {
+        if (pendingCount()) {
+          const r = await syncQueue();
+          setSyncMsg(r.failed.length ? `Synced ${r.synced}; ${r.failed.length} rejected: ${r.failed.join("; ")}` : r.synced ? `Synced ${r.synced} offline scan(s).` : null);
+        }
+        await cacheRegistry();
+      } catch {
+        /* keep previous cache */
+      }
+      setPending(pendingCount());
+    };
+    const goOffline = () => setOffline(true);
+    void sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  const show = useCallback((row: Match | null) => {
+    if (row && row.status !== "active") {
+      setAlarm(row);
+      soundAlarm();
+    }
+    setStatus(row ? { kind: "match", match: row } : { kind: "nomatch" });
+  }, []);
+
+  const lookupOffline = useCallback(async (value: string) => {
+    setOffline(true);
+    const r = await offlineLookup(value);
+    if (r === "nocache") setStatus({ kind: "error", title: "Offline", message: "No saved registry on this phone yet. Connect once to download it." });
+    else show(r);
+  }, [show]);
 
   const lookup = useCallback(async (value: string) => {
     setStatus({ kind: "checking" });
     setChecks({ face: false, serial: false });
+    if (!navigator.onLine) return lookupOffline(value);
     try {
       const { data, error } = await supabase.rpc("lookup_laptop", { _token: value });
       if (error) throw error;
-      const row = (data as Match[] | null)?.[0];
-      setStatus(row ? { kind: "match", match: row } : { kind: "nomatch" });
+      setOffline(false);
+      show((data as Match[] | null)?.[0] ?? null);
     } catch (err) {
+      if (/fetch|network/i.test(errMsg(err))) return lookupOffline(value);
       setStatus({ kind: "error", title: "Lookup failed", message: errMsg(err) });
     }
-  }, []);
+  }, [show, lookupOffline]);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,9 +166,16 @@ export function ScanTab() {
     const direction = m.on_campus ? "out" : "in";
     setBusy(true);
     try {
+      if (offline || !navigator.onLine) {
+        const at = await queueOffline({ ...m, owner_id: (m as Match & { owner_id?: string }).owner_id ?? "" }, direction);
+        setPending(pendingCount());
+        setStatus({ kind: "done", match: m, direction, at });
+        return;
+      }
       const { data, error } = await supabase.rpc("record_gate_event", { _laptop_id: m.laptop_id, _direction: direction });
       if (error) throw error;
       setStatus({ kind: "done", match: m, direction, at: data as string });
+      void cacheRegistry().catch(() => {});
     } catch (err) {
       setStatus({ kind: "error", title: "Access not recorded", message: errMsg(err) });
     } finally {
@@ -113,6 +187,25 @@ export function ScanTab() {
 
   return (
     <div className="space-y-4">
+      {alarm && (
+        <div role="alertdialog" className="fixed inset-0 z-50 flex animate-pulse flex-col items-center justify-center gap-4 bg-destructive p-6 text-center text-destructive-foreground">
+          <p className="text-5xl font-black uppercase tracking-widest">Stop</p>
+          <p className="text-2xl font-bold uppercase">{alarm.status} device</p>
+          <p className="font-mono text-xl break-all">{alarm.serial_number}</p>
+          <p className="text-lg">Registered to {alarm.full_name || "unknown"} (@{alarm.username})</p>
+          <p className="text-sm">Do not let this laptop through. Hold it and call security.</p>
+          <button type="button" onClick={() => setAlarm(null)} className="mt-4 rounded-lg border-2 border-current px-6 py-3 font-semibold">
+            Acknowledge
+          </button>
+        </div>
+      )}
+      {(offline || pending > 0 || syncMsg) && (
+        <div className="surface text-sm">
+          {offline && <p className="font-semibold text-destructive">Offline mode — using this phone's saved registry. Scans will sync automatically.</p>}
+          {pending > 0 && <p className="text-muted-foreground">{pending} scan(s) waiting to sync.</p>}
+          {syncMsg && <p className="text-muted-foreground">{syncMsg}</p>}
+        </div>
+      )}
       <div className={showCamera ? "surface space-y-3" : "hidden"}>
         <h2 className="text-lg font-semibold">Scan device QR code</h2>
         <div className="overflow-hidden rounded-xl border border-border bg-black">

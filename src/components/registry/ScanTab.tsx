@@ -16,6 +16,7 @@ type Match = {
   username: string | null;
   owner_photo_path: string | null;
   other_on_campus: boolean;
+  owner_id?: string;
 };
 
 type Status =

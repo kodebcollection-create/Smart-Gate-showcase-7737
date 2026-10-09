@@ -3,6 +3,7 @@ import type QrScannerType from "qr-scanner";
 import { supabase } from "@/integrations/supabase/client";
 import { errMsg } from "@/lib/photos";
 import { Photo } from "./Photo";
+import { cacheRegistry, offlineLookup, pendingCount, queueOffline, syncQueue } from "@/lib/offline-gate";
 
 type Match = {
   laptop_id: string;
@@ -164,9 +165,16 @@ export function ScanTab() {
     const direction = m.on_campus ? "out" : "in";
     setBusy(true);
     try {
+      if (offline || !navigator.onLine) {
+        const at = await queueOffline({ ...m, owner_id: (m as Match & { owner_id?: string }).owner_id ?? "" }, direction);
+        setPending(pendingCount());
+        setStatus({ kind: "done", match: m, direction, at });
+        return;
+      }
       const { data, error } = await supabase.rpc("record_gate_event", { _laptop_id: m.laptop_id, _direction: direction });
       if (error) throw error;
       setStatus({ kind: "done", match: m, direction, at: data as string });
+      void cacheRegistry().catch(() => {});
     } catch (err) {
       setStatus({ kind: "error", title: "Access not recorded", message: errMsg(err) });
     } finally {
@@ -178,6 +186,25 @@ export function ScanTab() {
 
   return (
     <div className="space-y-4">
+      {alarm && (
+        <div role="alertdialog" className="fixed inset-0 z-50 flex animate-pulse flex-col items-center justify-center gap-4 bg-destructive p-6 text-center text-destructive-foreground">
+          <p className="text-5xl font-black uppercase tracking-widest">Stop</p>
+          <p className="text-2xl font-bold uppercase">{alarm.status} device</p>
+          <p className="font-mono text-xl break-all">{alarm.serial_number}</p>
+          <p className="text-lg">Registered to {alarm.full_name || "unknown"} (@{alarm.username})</p>
+          <p className="text-sm">Do not let this laptop through. Hold it and call security.</p>
+          <button type="button" onClick={() => setAlarm(null)} className="mt-4 rounded-lg border-2 border-current px-6 py-3 font-semibold">
+            Acknowledge
+          </button>
+        </div>
+      )}
+      {(offline || pending > 0 || syncMsg) && (
+        <div className="surface text-sm">
+          {offline && <p className="font-semibold text-destructive">Offline mode — using this phone's saved registry. Scans will sync automatically.</p>}
+          {pending > 0 && <p className="text-muted-foreground">{pending} scan(s) waiting to sync.</p>}
+          {syncMsg && <p className="text-muted-foreground">{syncMsg}</p>}
+        </div>
+      )}
       <div className={showCamera ? "surface space-y-3" : "hidden"}>
         <h2 className="text-lg font-semibold">Scan device QR code</h2>
         <div className="overflow-hidden rounded-xl border border-border bg-black">

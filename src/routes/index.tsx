@@ -13,16 +13,12 @@ import { AdminTab } from "@/components/registry/AdminTab";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CUK Smart Gate — Laptop registration and gate checks" },
-      {
-        name: "description",
-        content: "Students register laptops and get a secure QR code; CUK guards scan it to sign laptops in and out.",
-      },
-      { property: "og:title", content: "CUK Smart Gate — Laptop registration and gate checks" },
-      {
-        property: "og:description",
-        content: "Students register laptops and get a secure QR code; CUK guards scan it to sign laptops in and out.",
-      },
+      { title: "CUK SmartGate" },
+      { name: "description", content: "CUK SmartGate" },
+      { property: "og:title", content: "CUK SmartGate" },
+      { property: "og:description", content: "CUK SmartGate" },
+      { name: "twitter:title", content: "CUK SmartGate" },
+      { name: "twitter:description", content: "CUK SmartGate" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

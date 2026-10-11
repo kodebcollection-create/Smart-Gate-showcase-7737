@@ -1,6 +1,9 @@
 - [x] Add forgotten-password request and new-password form, preserving existing profiles.
 - [ ] Configure SmartGate authentication email branding (requires supported sender setup).
-- [ ] Verify password-recovery request and recovery form.- [x] CSV export, passport photo on scan, AI history questions for guards
+- [ ] Verify password-recovery request and recovery form.
+- [x] CSV export, passport photo on scan, AI history questions for guards
+- [x] Stolen-device alarm, offline mode, student lost option, lost & found CSV with filters + sample
+- [x] Student lost-report status timeline
 - [x] AI unusual-patterns on real history, shown on scanner
 - [x] Admin tab (admins use the same sign-in; role granted by hand) (search, status edit, delete)
 - [ ] Rename project to SmartGate (user action in settings)

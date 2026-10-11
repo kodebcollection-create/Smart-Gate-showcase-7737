@@ -19,6 +19,7 @@ type MyLaptop = {
 };
 
 type GateEvent = { id: string; laptop_id: string; direction: string; created_at: string };
+type LostEvent = { id: string; laptop_id: string; stage: string; note: string | null; created_at: string };
 
 async function toQr(secret: string) {
   return QRCode.toDataURL(secret, { width: 640, margin: 2, color: { dark: "#0b1220", light: "#ffffff" } });
@@ -27,6 +28,7 @@ async function toQr(secret: string) {
 export function RegisterTab({ userId }: { userId: string }) {
   const [laptops, setLaptops] = useState<MyLaptop[]>([]);
   const [events, setEvents] = useState<GateEvent[]>([]);
+  const [lostEvents, setLostEvents] = useState<LostEvent[]>([]);
   const [serial, setSerial] = useState("");
   const [model, setModel] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
@@ -48,6 +50,12 @@ export function RegisterTab({ userId }: { userId: string }) {
       .order("created_at", { ascending: false })
       .limit(20);
     setEvents((ev as GateEvent[]) ?? []);
+    const { data: le } = await supabase
+      .from("lost_report_events")
+      .select("id, laptop_id, stage, note, created_at")
+      .eq("owner_id", userId)
+      .order("created_at", { ascending: true });
+    setLostEvents((le as LostEvent[]) ?? []);
   }, [userId]);
 
   useEffect(() => {

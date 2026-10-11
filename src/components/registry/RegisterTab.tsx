@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { errMsg, uploadPhoto } from "@/lib/photos";
 import { Field } from "./Field";
 import { Photo, PhotoInput } from "./Photo";
+import { STAGE_LABEL } from "@/lib/lost-found";
 
 type MyLaptop = {
   id: string;

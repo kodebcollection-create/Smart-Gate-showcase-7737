@@ -144,6 +144,33 @@ export function RegisterTab({ userId }: { userId: string }) {
         ))}
       </div>
 
+      {lostEvents.length > 0 && (
+        <div className="surface space-y-3">
+          <h2 className="text-lg font-semibold">Lost report status</h2>
+          {[...new Set(lostEvents.map((e) => e.laptop_id))].map((lid) => {
+            const serial = laptops.find((l) => l.id === lid)?.serial_number ?? "Laptop";
+            const evs = lostEvents.filter((e) => e.laptop_id === lid);
+            return (
+              <div key={lid} className="space-y-2">
+                <p className="font-mono text-sm font-semibold">{serial}</p>
+                <ol className="space-y-2 border-l-2 border-border pl-4">
+                  {evs.map((e, i) => (
+                    <li key={e.id} className="relative text-sm">
+                      <span className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ${i === evs.length - 1 ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                      <p className={i === evs.length - 1 ? "font-semibold" : "text-muted-foreground"}>
+                        {STAGE_LABEL[e.stage] ?? e.stage}
+                      </p>
+                      {e.note && <p className="text-xs text-muted-foreground">{e.note}</p>}
+                      <p className="font-mono text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="surface space-y-2">
         <h2 className="text-lg font-semibold">Gate history</h2>
         {events.length === 0 && <p className="text-sm text-muted-foreground">No sign-ins yet.</p>}

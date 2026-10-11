@@ -9,3 +9,4 @@
 - [ ] Rename project to SmartGate (user action in settings)
 - [ ] Demo guard scan test: sign-in/out times in history
 - [ ] Sign-in/out confirmation emails to students (needs an email domain)
+- [ ] Real-phone alarm test: mark laptop lost, scan, confirm red alarm + vibration (needs physical phone)

@@ -10,3 +10,8 @@
 - [ ] Demo guard scan test: sign-in/out times in history
 - [ ] Sign-in/out confirmation emails to students (needs an email domain)
 - [ ] Real-phone alarm test: mark laptop lost, scan, confirm red alarm + vibration (needs physical phone)
+- [x] Phase 1: live lost broadcast, alarm modes, guard audit trail, found-device log + CSV
+- [ ] Phase 2: installable app + offline caching
+- [ ] Phase 3: device types, student-to-student transfer, expiring QR passes
+- [ ] Phase 4: occupancy counter, peak-hour chart, multi-gate
+- [ ] ID card reading (needs decision: pre-fill only?)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { errMsg } from "@/lib/photos";
+import { AuditTrail } from "./AuditTrail";
 
 type Row = {
   id: string;
@@ -69,6 +70,7 @@ export function AdminTab() {
   );
 
   return (
+    <div className="space-y-4">
     <div className="surface space-y-3">
       <h2 className="text-lg font-semibold">All laptops</h2>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search owner, serial, model, status" className="field text-sm" />
@@ -98,6 +100,8 @@ export function AdminTab() {
         </table>
         {shown.length === 0 && <p className="py-3 text-sm text-muted-foreground">No laptops found.</p>}
       </div>
+    </div>
+    <AuditTrail />
     </div>
   );
 }

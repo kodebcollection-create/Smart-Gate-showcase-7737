@@ -42,7 +42,6 @@ function soundAlarm(mode: AlertMode = "normal") {
     for (let i = 0; i < (loud ? 14 : 6); i++) {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
-      o.type = "square";
       o.type = loud ? "sawtooth" : "square";
       o.frequency.value = loud ? (i % 2 ? 1800 : 2600) : i % 2 ? 660 : 990;
       g.gain.value = loud ? 1 : 0.25;

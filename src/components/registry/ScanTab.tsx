@@ -28,20 +28,32 @@ type Status =
   | { kind: "nomatch" }
   | { kind: "error"; title: string; message: string };
 
-function soundAlarm() {
+type AlertMode = "normal" | "loud" | "continuous";
+let vibTimer: ReturnType<typeof setInterval> | null = null;
+function stopVibration() {
+  if (vibTimer) clearInterval(vibTimer);
+  vibTimer = null;
+  navigator.vibrate?.(0);
+}
+function soundAlarm(mode: AlertMode = "normal") {
   try {
+    const loud = mode !== "normal";
     const ctx = new AudioContext();
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < (loud ? 14 : 6); i++) {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
-      o.type = "square";
-      o.frequency.value = i % 2 ? 660 : 990;
-      g.gain.value = 0.25;
+      o.type = loud ? "sawtooth" : "square";
+      o.frequency.value = loud ? (i % 2 ? 1800 : 2600) : i % 2 ? 660 : 990;
+      g.gain.value = loud ? 1 : 0.25;
       o.connect(g).connect(ctx.destination);
       o.start(ctx.currentTime + i * 0.3);
       o.stop(ctx.currentTime + i * 0.3 + 0.25);
     }
     navigator.vibrate?.([400, 150, 400, 150, 400]);
+    if (mode === "continuous") {
+      stopVibration();
+      vibTimer = setInterval(() => navigator.vibrate?.(800), 1000);
+    }
   } catch {
     /* audio unavailable */
   }
@@ -57,6 +69,32 @@ export function ScanTab() {
   const [pending, setPending] = useState(0);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [alarm, setAlarm] = useState<Match | null>(null);
+  const [mode, setMode] = useState<AlertMode>("normal");
+  const [broadcasts, setBroadcasts] = useState<{ id: string; serial: string; owner: string }[]>([]);
+  const modeRef = useRef<AlertMode>("normal");
+  useEffect(() => {
+    const m = localStorage.getItem("sg-alert-mode") as AlertMode | null;
+    if (m) { setMode(m); modeRef.current = m; }
+  }, []);
+  const changeMode = (m: AlertMode) => { setMode(m); modeRef.current = m; localStorage.setItem("sg-alert-mode", m); };
+
+  useEffect(() => {
+    const ch = supabase
+      .channel("lost-broadcast")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "lost_report_events" }, async (p) => {
+        const ev = p.new as { id: string; laptop_id: string; stage: string; owner_id: string };
+        if (ev.stage !== "reported") return;
+        const [{ data: l }, { data: o }] = await Promise.all([
+          supabase.from("laptops").select("serial_number").eq("id", ev.laptop_id).maybeSingle(),
+          supabase.from("profiles").select("full_name").eq("id", ev.owner_id).maybeSingle(),
+        ]);
+        setBroadcasts((b) => [{ id: ev.id, serial: l?.serial_number ?? "unknown", owner: o?.full_name ?? "" }, ...b]);
+        soundAlarm("normal");
+        void cacheRegistry().catch(() => {});
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(ch); };
+  }, []);
 
   useEffect(() => {
     const sync = async () => {
@@ -86,7 +124,7 @@ export function ScanTab() {
   const show = useCallback((row: Match | null) => {
     if (row && row.status !== "active") {
       setAlarm(row);
-      soundAlarm();
+      soundAlarm(modeRef.current);
     }
     setStatus(row ? { kind: "match", match: row } : { kind: "nomatch" });
   }, []);
@@ -194,11 +232,29 @@ export function ScanTab() {
           <p className="font-mono text-xl break-all">{alarm.serial_number}</p>
           <p className="text-lg">Registered to {alarm.full_name || "unknown"} (@{alarm.username})</p>
           <p className="text-sm">Do not let this laptop through. Hold it and call security.</p>
-          <button type="button" onClick={() => setAlarm(null)} className="mt-4 rounded-lg border-2 border-current px-6 py-3 font-semibold">
+          <button type="button" onClick={() => { stopVibration(); setAlarm(null); }} className="mt-4 rounded-lg border-2 border-current px-6 py-3 font-semibold">
             Acknowledge
           </button>
         </div>
       )}
+      {broadcasts.map((b) => (
+        <div key={b.id} role="alert" className="surface flex items-start justify-between gap-3 border-destructive bg-destructive/15">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-destructive">Just reported lost</p>
+            <p className="font-mono">{b.serial}</p>
+            <p className="text-xs text-muted-foreground">{b.owner} · watch for this device</p>
+          </div>
+          <button type="button" className="text-xs underline" onClick={() => setBroadcasts((x) => x.filter((y) => y.id !== b.id))}>Dismiss</button>
+        </div>
+      ))}
+      <div className="surface flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Alarm:</span>
+        {(["normal", "loud", "continuous"] as const).map((m) => (
+          <button key={m} type="button" onClick={() => changeMode(m)} className={`rounded-md border px-2 py-1 text-xs ${mode === m ? "border-primary text-primary" : "border-border"}`}>
+            {m === "normal" ? "Normal" : m === "loud" ? "Loud siren" : "Loud + nonstop vibration"}
+          </button>
+        ))}
+      </div>
       {(offline || pending > 0 || syncMsg) && (
         <div className="surface text-sm">
           {offline && <p className="font-semibold text-destructive">Offline mode — using this phone's saved registry. Scans will sync automatically.</p>}

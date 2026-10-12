@@ -10,10 +10,46 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
+      found_items: {
+        Row: {
+          description: string
+          found_at: string
+          found_by: string
+          id: string
+          location: string
+          note: string | null
+          photo_path: string | null
+          serial: string | null
+          status: string
+        }
+        Insert: {
+          description: string
+          found_at?: string
+          found_by?: string
+          id?: string
+          location: string
+          note?: string | null
+          photo_path?: string | null
+          serial?: string | null
+          status?: string
+        }
+        Update: {
+          description?: string
+          found_at?: string
+          found_by?: string
+          id?: string
+          location?: string
+          note?: string | null
+          photo_path?: string | null
+          serial?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       gate_events: {
         Row: {
           created_at: string
@@ -48,6 +84,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      guard_audit: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          details: string | null
+          id: string
+          laptop_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          laptop_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          laptop_id?: string | null
+        }
+        Relationships: []
       }
       laptop_transfers: {
         Row: {
